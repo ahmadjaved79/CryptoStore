@@ -83,58 +83,104 @@ export const listFiles = async (req, res) => {
 
 export const downloadFile = async (req, res) => {
   try {
-    const { id } = req.params;
+    const fileId = req.params.id;
+    const userId = req.user.id; // comes from auth middleware
 
-
-
-
-    // 1️⃣ Get file metadata from DB
-    const { data: file, error: dbError } = await supabase
+    // 1️⃣ CHECK OWNERSHIP
+    const { data: owned } = await supabase
       .from("files")
       .select("*")
-      .eq("id", id)
+      .eq("id", fileId)
+      .eq("uploaded_by", userId)
       .single();
 
-    if (dbError || !file) {
-      return res.status(404).json({ error: "File not found" });
+    // 2️⃣ IF NOT OWNER → CHECK SHARED ACCESS
+    if (!owned) {
+      const { data: shared } = await supabase
+        .from("file_shares")
+        .select("*")
+        .eq("file_id", fileId)
+        .eq("shared_with", userId)
+        .single();
+
+      if (!shared) {
+        return res.status(403).json({ error: "Access denied" });
+      }
     }
 
-    // 2️⃣ Download encrypted file from storage
-    const { data: encryptedData, error: storageError } =
-      await supabase.storage
-        .from(process.env.SUPABASE_BUCKET)
-        .download(file.storage_path);
+    // 3️⃣ FETCH FILE METADATA
+    const { data: file } = await supabase
+      .from("files")
+      .select("*")
+      .eq("id", fileId)
+      .single();
 
-    if (storageError) {
-      return res.status(400).json({ error: storageError.message });
-    }
+    // 4️⃣ DOWNLOAD FROM BUCKET
+   const { data: encryptedBlob } = await supabase.storage
+  .from(process.env.SUPABASE_BUCKET)
+  .download(file.storage_path);
 
-    // 3️⃣ Convert to Buffer
-    const encryptedBuffer = Buffer.from(
-      await encryptedData.arrayBuffer()
-    );
+// 🔥 Convert Blob → Buffer
+const arrayBuffer = await encryptedBlob.arrayBuffer();
+const encryptedBuffer = Buffer.from(arrayBuffer);
 
-    // 4️⃣ Decrypt
-    const decryptedBuffer = decryptBuffer(encryptedBuffer);
-        // AUDIT LOG — DOWNLOAD
-await supabase.from("audit_logs").insert([
-  {
-    user_id: req.user.id,
-    file_id: file.id,
-    action: "DOWNLOAD",
-  },
-]);
-    // 5️⃣ Send original file back to user
+// ✅ Now decrypt
+const decrypted = decryptBuffer(encryptedBuffer);
+
+
+ 
+
+    // 6️⃣ SEND FILE
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${file.filename}"`
     );
-    res.setHeader("Content-Type", file.mime_type);
-
-    res.send(decryptedBuffer);
+    res.send(decrypted);
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Download failed" });
   }
+};
 
-  };
+
+  export const shareFile = async (req, res) => {
+  const { fileId, userId } = req.body;
+  const sharedBy = userId; // from auth middleware
+
+  // 1️⃣ INSERT INTO file_shares TABLE
+  const { error } = await supabase
+    .from("file_shares")
+    .insert({
+      file_id: fileId,
+      shared_with: userId,
+    });
+
+  
+
+  if (error) return res.status(400).json({ error });
+    // 2️⃣ AUDIT LOG — SHARE
+  await supabase.from("audit_logs").insert({
+    user_id: sharedBy,
+    file_id: fileId,
+    action: "SHARE",
+  });
+  res.json({ message: "File shared successfully" });
+
+};
+
+
+export const getSharedFiles = async (req, res) => {
+  const userId = req.user.id;
+
+  const { data, error } = await supabase
+    .from("file_shares")
+    .select("files(*)")
+    .eq("shared_with", userId);
+
+  if (error) return res.status(400).json({ error });
+
+  const files = data.map((row) => row.files);
+
+  res.json({ data: files });
+};

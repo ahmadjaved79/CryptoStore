@@ -3,6 +3,7 @@ import Login from "../pages/Login";
 import Signup from "../pages/Signup";
 import Dashboard from "../pages/Dashboard";
 import Admin from "../pages/Admin";
+import Landing from "../pages/Landing";
 import { useAuthStore } from "../store/auth.store";
 
 export default function AppRoutes() {
@@ -11,8 +12,10 @@ export default function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/" element={<Landing />} />
+<Route path="/login" element={<Login />} />
+<Route path="/signup" element={<Signup />} />
+
 
         <Route
           path="/dashboard"

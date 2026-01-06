@@ -7,12 +7,24 @@ interface Props {
   onShare?: (file: FileItem) => void;
 }
 
+
+
 export default function FileTable({
   files,
   role,
   onDownload,
   onShare,
-}: Props) {
+}: Props) 
+ 
+{
+   if (!Array.isArray(files)) {
+  return (
+    <div className="text-gray-400 p-4">
+      No files available
+    </div>
+  );
+}
+
   return (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
       <table className="w-full text-sm">

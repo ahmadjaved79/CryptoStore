@@ -32,12 +32,16 @@ const [logs, setLogs] = useState<any[]>([]); // logs can stay any for now
     }
   }, [user, navigate]);
 
-  // 📁 Load files
-  useEffect(() => {
-    if (activeTab === "files") {
-      listFiles().then(setFiles);
-    }
-  }, [activeTab]);
+ useEffect(() => {
+  if (activeTab === "files") {
+    console.log("ADMIN: fetching files");
+    listFiles().then((data) => {
+      console.log("ADMIN FILES:", data);
+      setFiles(data);
+    });
+  }
+}, [activeTab]);
+
 
   // 👤 Load users
   useEffect(() => {
